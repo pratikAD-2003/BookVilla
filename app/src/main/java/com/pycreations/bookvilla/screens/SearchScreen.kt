@@ -4,69 +4,99 @@ import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.pycreations.bookvilla.R
+import com.pycreations.bookvilla.data.models.Item
 import com.pycreations.bookvilla.navigation.Route
 import com.pycreations.bookvilla.screens.components.BookItemLy
-import com.pycreations.bookvilla.screens.components.GenreItemLy
+import com.pycreations.bookvilla.screens.components.MyText
 import com.pycreations.bookvilla.screens.components.SearchBar
 import com.pycreations.bookvilla.screens.components.shimmer.BookItemShimmer
 import com.pycreations.bookvilla.viewmodel.BookViewModel
 import com.pycreations.bookvilla.viewmodel.GetGenreState
-import java.net.URLEncoder
-import java.util.Locale
 
 @Composable
-fun SearchScreen(navHostController: NavHostController, bookViewModel: BookViewModel,query : String) {
+fun SearchScreen(
+    navHostController: NavHostController,
+    bookViewModel: BookViewModel,
+    query: String
+) {
     var text by remember { mutableStateOf(query.trim()) }
-    val genreState by bookViewModel.getSearchState.collectAsState()
+
+    val items = remember { mutableStateListOf<Item>() } // Replace with your model
+    var startIndex by remember { mutableIntStateOf(0) }
+    val maxResults = 10
+    val searchState by bookViewModel.getSearchLimitState.collectAsState()
+    var isLoading by remember { mutableStateOf(false) }
 
     LaunchedEffect(text) {
-        if (text.length > 4) { // Avoid too many requests
-            try {
-                bookViewModel.getSearch(text)
-            } catch (e: Exception) {
-                null
-            }
-        }
-        else {
-            bookViewModel.resetSearchState()
+        if (text.length > 4) {
+            startIndex = 0
+            items.clear()
+            isLoading = true
+            bookViewModel.getSearchLimit(text, startIndex, maxResults)
+        } else {
+            bookViewModel.resetSearchLimitState()
+            items.clear()
         }
     }
+
+    LaunchedEffect(searchState) {
+        when (searchState) {
+            is GetGenreState.Success -> {
+                val newItems = (searchState as GetGenreState.Success).response.items
+                Log.d("SearchDebug", "New items received: ${newItems?.size}, Start: $startIndex")
+                if (!newItems.isNullOrEmpty()) {
+                    items.addAll(newItems)
+                    startIndex += maxResults
+                }
+                isLoading = false
+            }
+
+            is GetGenreState.Error -> {
+                isLoading = false
+            }
+
+            is GetGenreState.Loading -> {
+                isLoading = true
+            }
+
+            else -> {}
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -111,40 +141,44 @@ fun SearchScreen(navHostController: NavHostController, bookViewModel: BookViewMo
                 }
             )
             Spacer(Modifier.height(10.dp))
-            when (genreState) {
-                is GetGenreState.Loading ->
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        contentPadding = PaddingValues(5.dp)
-                    ) {
-                        items(10) {
-                            BookItemShimmer()
-                        }
+            if (isLoading) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    contentPadding = PaddingValues(5.dp)
+                ) {
+                    items(10) {
+                        BookItemShimmer()
                     }
-
-                is GetGenreState.Error -> {
-                    val response = (genreState as GetGenreState.Error).error
-                    bookViewModel.resetSearchState()
                 }
-
-                is GetGenreState.Success -> {
-                    val response = (genreState as GetGenreState.Success).response
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        contentPadding = PaddingValues(5.dp)
-                    ) {
-                        items(response.items) {
-                            BookItemLy(it) {
-                                navHostController.navigate(Route.BookDetailRoute.route + "/${it}")
-                            }
-                        }
+            }
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                contentPadding = PaddingValues(5.dp)
+            ) {
+                items(items) {
+                    BookItemLy(it) {
+                        navHostController.navigate(Route.BookDetailRoute.route + "/${it}")
                     }
-//                    Log.d("SEARCH_ITEM", response.toString())
-                    Spacer(Modifier.height(10.dp))
                 }
-
-                else -> {
-                    bookViewModel.resetSearchState()
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(10.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MyText(
+                            text = "Tap to load more..",
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 16,
+                            modifier = Modifier.clickable {
+                                if (!isLoading) {
+                                    isLoading = true
+                                    bookViewModel.getSearchLimit(text, startIndex, maxResults)
+                                }
+                            })
+                    }
                 }
             }
         }

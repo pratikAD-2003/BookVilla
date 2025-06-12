@@ -32,6 +32,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -47,6 +49,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.pycreations.bookvilla.R
+import com.pycreations.bookvilla.data.models.Item
 import com.pycreations.bookvilla.data.utils.Constants
 import com.pycreations.bookvilla.data.utils.SharedPrefManager
 import com.pycreations.bookvilla.navigation.Route
@@ -71,12 +74,69 @@ fun HomeScreen(
     var selectedGenre by remember { mutableStateOf<String?>(SharedPrefManager.getGenre(context)) }
     selectedGenre = SharedPrefManager.updateGenre(context, selectedGenre!!)
 
+    val items1 = remember { mutableStateListOf<Item>() } // Replace with your model
+    val items2 = remember { mutableStateListOf<Item>() } // Replace with your model
+    var startIndex1 by remember { mutableIntStateOf(0) }
+    var startIndex2 by remember { mutableIntStateOf(0) }
+    val maxResults = 10
+    var isLoading1 by remember { mutableStateOf(false) }
+    var isLoading2 by remember { mutableStateOf(false) }
+
+
     val genreState by bookViewModel.getGenreState.collectAsState()
     val genreTrending by bookViewModel.getTrendingState.collectAsState()
 
     LaunchedEffect(Unit) {
-        bookViewModel.getGenre("subject:${selectedGenre}")
-        bookViewModel.getTrending("subject:fiction")
+        bookViewModel.getGenre("subject:${selectedGenre}", startIndex1, maxResults)
+        bookViewModel.getTrending("subject:fantasy", startIndex2, maxResults)
+    }
+
+    LaunchedEffect(genreState) {
+        when (genreState) {
+            is GetGenreState.Success -> {
+                val newItems = (genreState as GetGenreState.Success).response.items
+                Log.d("SearchDebug-1", "New items received: ${newItems?.size}, Start: $startIndex1")
+                if (!newItems.isNullOrEmpty()) {
+                    items1.addAll(newItems)
+                    startIndex1 += maxResults
+                }
+                isLoading1 = false
+            }
+
+            is GetGenreState.Error -> {
+                isLoading1 = false
+            }
+
+            is GetGenreState.Loading -> {
+                isLoading1 = true
+            }
+
+            else -> {}
+        }
+    }
+
+    LaunchedEffect(genreTrending) {
+        when (genreTrending) {
+            is GetGenreState.Success -> {
+                val newItems = (genreTrending as GetGenreState.Success).response.items
+                Log.d("SearchDebug-2", "New items received: ${newItems?.size}, Start: $startIndex2")
+                if (!newItems.isNullOrEmpty()) {
+                    items2.addAll(newItems)
+                    startIndex2 += maxResults
+                }
+                isLoading2 = false
+            }
+
+            is GetGenreState.Error -> {
+                isLoading2 = false
+            }
+
+            is GetGenreState.Loading -> {
+                isLoading2 = true
+            }
+
+            else -> {}
+        }
     }
     Column(
         modifier = Modifier
@@ -152,7 +212,10 @@ fun HomeScreen(
                 items(Constants.popularGenres1) {
                     GenreItemLy(it, isSelected = it == selectedGenre, onClick = {
                         selectedGenre = it
-                        bookViewModel.getGenre("subject:${selectedGenre}")
+                        startIndex1 = 0
+                        items1.clear()
+                        bookViewModel.resetGetGenre()
+                        bookViewModel.getGenre("subject:${selectedGenre}", startIndex1, maxResults)
                     }, modifier = Modifier.padding(5.dp))
                 }
             }
@@ -160,7 +223,10 @@ fun HomeScreen(
                 items(Constants.popularGenres2) {
                     GenreItemLy(it, isSelected = it == selectedGenre, onClick = {
                         selectedGenre = it
-                        bookViewModel.getGenre("subject:${selectedGenre}")
+                        startIndex1 = 0
+                        items1.clear()
+                        bookViewModel.resetGetGenre()
+                        bookViewModel.getGenre("subject:${selectedGenre}", startIndex1, maxResults)
                     }, modifier = Modifier.padding(5.dp))
                 }
             }
@@ -183,44 +249,56 @@ fun HomeScreen(
                     modifier = Modifier
                         .padding(end = 15.dp)
                         .clickable {
-                            onOpen()
+                            val encodedQuery =
+                                URLEncoder.encode(selectedGenre, "UTF-8")
+                            navHostController.navigate(Route.SearchBookRoute.route + "/${"subject:$encodedQuery"}")
                         }
                 )
             }
 
             Spacer(Modifier.height(10.dp))
-            when (genreState) {
-                is GetGenreState.Loading ->
-                    LazyRow(
-                        contentPadding = PaddingValues(5.dp)
-                    ) {
-                        items(3) {
-                            BookItemShimmer()
+            if (isLoading1) {
+                LazyRow(
+                    contentPadding = PaddingValues(5.dp)
+                ) {
+                    items(3) {
+                        BookItemShimmer()
+                    }
+                }
+            } else {
+                LazyRow(
+                    contentPadding = PaddingValues(5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    items(items1) {
+                        BookItemLy(it) {
+                            navHostController.navigate(Route.BookDetailRoute.route + "/${it}")
                         }
                     }
-
-                is GetGenreState.Error -> {
-                    val response = (genreState as GetGenreState.Error).error
-                    bookViewModel.resetGetGenre()
-                }
-
-                is GetGenreState.Success -> {
-                    val response = (genreState as GetGenreState.Success).response
-//                    Log.d("Genre_DATA", response.toString())
-                    LazyRow(
-                        contentPadding = PaddingValues(5.dp)
-                    ) {
-                        items(response.items) {
-                            BookItemLy(it) {
-                                navHostController.navigate(Route.BookDetailRoute.route + "/${it}")
-                            }
+                    item {
+                        Box(
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            MyText(
+                                text = "Tap to more",
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 14,
+                                modifier = Modifier
+                                    .padding(end = 15.dp)
+                                    .clickable {
+                                        if (!isLoading1) {
+                                            isLoading1 = true
+                                            bookViewModel.getGenre(
+                                                "subject:${selectedGenre}",
+                                                startIndex1,
+                                                maxResults
+                                            )
+                                        }
+                                    }
+                            )
                         }
                     }
-                    Spacer(Modifier.height(10.dp))
-                }
-
-                else -> {
-                    bookViewModel.resetGetGenre()
                 }
             }
             Row(
@@ -241,46 +319,58 @@ fun HomeScreen(
                     modifier = Modifier
                         .padding(end = 15.dp)
                         .clickable {
-                            onOpen()
+                            val encodedQuery = URLEncoder.encode("fantasy", "UTF-8")
+                            navHostController.navigate(Route.SearchBookRoute.route + "/${"subject:$encodedQuery"}")
                         }
                 )
             }
 
             Spacer(Modifier.height(10.dp))
-            when (genreTrending) {
-                is GetGenreState.Loading -> LazyRow(
+            if (isLoading2) {
+                LazyRow(
                     contentPadding = PaddingValues(5.dp)
                 ) {
                     items(3) {
                         BookItemShimmer()
                     }
                 }
-
-                is GetGenreState.Error -> {
-                    val response = (genreTrending as GetGenreState.Error).error
-                    Log.d("Genre_DATA", response.toString())
-                    bookViewModel.resetTrendingGenre()
-                }
-
-                is GetGenreState.Success -> {
-                    val response = (genreTrending as GetGenreState.Success).response
-                    Log.d("Genre_DATA", response.toString())
-                    LazyRow(
-                        contentPadding = PaddingValues(5.dp)
-                    ) {
-                        items(response.items) {
-                            BookItemLy(it) {
-                                navHostController.navigate(Route.BookDetailRoute.route + "/${it}")
-                            }
+            } else {
+                LazyRow(
+                    contentPadding = PaddingValues(5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    items(items2) {
+                        BookItemLy(it) {
+                            navHostController.navigate(Route.BookDetailRoute.route + "/${it}")
                         }
                     }
-                    Spacer(Modifier.height(10.dp))
-                }
-
-                else -> {
-                    bookViewModel.resetTrendingGenre()
+                    item {
+                        Box(
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            MyText(
+                                text = "Tap to more",
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 14,
+                                modifier = Modifier
+                                    .padding(end = 15.dp)
+                                    .clickable {
+                                        if (!isLoading2) {
+                                            isLoading2 = true
+                                            bookViewModel.getTrending(
+                                                "subject:fantasy",
+                                                startIndex2,
+                                                maxResults
+                                            )
+                                        }
+                                    }
+                            )
+                        }
+                    }
                 }
             }
+
             MyText(
                 text = "Genres and Subgenres",
                 fontWeight = FontWeight.SemiBold,
@@ -299,7 +389,6 @@ fun HomeScreen(
                         // handle sub-genre click
                         val encodedQuery = URLEncoder.encode(selectedSubGenre, "UTF-8")
                         navHostController.navigate(Route.SearchBookRoute.route + "/${"subject:$encodedQuery"}")
-//                        bookViewModel.getGenre("subject:$encodedQuery")
                     }
                 )
 
@@ -309,12 +398,3 @@ fun HomeScreen(
 
 
 }
-
-
-//@Composable
-//@Preview(showBackground = true)
-//fun HSPrev() {
-//    HomeScreen() {
-//
-//    }
-//}

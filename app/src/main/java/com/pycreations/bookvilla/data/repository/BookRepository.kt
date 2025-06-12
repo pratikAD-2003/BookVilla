@@ -7,21 +7,27 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class BookRepository {
-    suspend fun getByGenre(query : String) : GenreResponseModel{
+    suspend fun getByGenre(query: String): GenreResponseModel {
         return withContext(Dispatchers.IO) {
             apiService.getByGenre(query)
         }
     }
 
-    suspend fun getByTrending(query: String) : GenreResponseModel{
+    suspend fun getByTrending(query: String, startIndex: Int, endIndex: Int): GenreResponseModel {
         return withContext(Dispatchers.IO) {
-            apiService.getByTrending(query,"newest")
+            apiService.searchBooks(query, startIndex, endIndex)
         }
     }
 
-    suspend fun getByBookId(id: String) : Item{
+    suspend fun getByBookId(id: String): Item {
         return withContext(Dispatchers.IO) {
             apiService.getBookById(id)
+        }
+    }
+
+    suspend fun searchBook(query: String, startIndex: Int, endIndex: Int): GenreResponseModel {
+        return withContext(Dispatchers.IO) {
+            apiService.searchBooks(query, startIndex, endIndex)
         }
     }
 }

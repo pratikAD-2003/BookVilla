@@ -22,4 +22,11 @@ interface ApiService {
     suspend fun getBookById(
         @Path("id") volumeId: String
     ): Item
+
+    @GET("volumes")
+    suspend fun searchBooks(
+        @Query("q") query: String,
+        @Query("startIndex") startIndex: Int,
+        @Query("maxResults") maxResults: Int = 10
+    ): GenreResponseModel
 }

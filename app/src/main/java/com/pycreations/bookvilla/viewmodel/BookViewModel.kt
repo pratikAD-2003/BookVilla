@@ -47,22 +47,23 @@ class BookViewModel(private val bookRepository: BookRepository) : ViewModel() {
     private val _getSearchState = MutableStateFlow<GetGenreState>(GetGenreState.Idle)
     val getSearchState: StateFlow<GetGenreState> get() = _getSearchState
 
+    private val _getSearchLimitState = MutableStateFlow<GetGenreState>(GetGenreState.Idle)
+    val getSearchLimitState: StateFlow<GetGenreState> get() = _getSearchLimitState
+
+
     private val _getMultipleBooksByIdState =
         MutableStateFlow<GetMultipleByIdBookState>(GetMultipleByIdBookState.Idle)
     val getMultipleBooksByIdState: StateFlow<GetMultipleByIdBookState> get() = _getMultipleBooksByIdState
 
 
-    fun getGenre(query: String) {
+    fun getGenre(query: String, si: Int, ei: Int) {
         viewModelScope.launch {
             _getGenreState.value = GetGenreState.Loading
-            _getSearchState.value = GetGenreState.Loading
             try {
-                val response = bookRepository.getByGenre(query)
+                val response = bookRepository.searchBook(query, si, ei)
                 _getGenreState.value = GetGenreState.Success(response)
-                _getSearchState.value = GetGenreState.Success(response)
             } catch (e: Exception) {
                 _getGenreState.value = GetGenreState.Error("genre error " + e.message)
-                _getSearchState.value = GetGenreState.Error("genre error " + e.message)
             }
         }
     }
@@ -72,27 +73,27 @@ class BookViewModel(private val bookRepository: BookRepository) : ViewModel() {
 
     }
 
-    fun getSearch(query: String) {
+    fun getSearchLimit(query: String, si: Int, ei: Int) {
         viewModelScope.launch {
-            _getSearchState.value = GetGenreState.Loading
+            _getSearchLimitState.value = GetGenreState.Loading
             try {
-                val response = bookRepository.getByGenre(query)
-                _getSearchState.value = GetGenreState.Success(response)
+                val response = bookRepository.searchBook(query, si, ei)
+                _getSearchLimitState.value = GetGenreState.Success(response)
             } catch (e: Exception) {
-                _getSearchState.value = GetGenreState.Error("genre error " + e.message)
+                _getSearchLimitState.value = GetGenreState.Error("genre error " + e.message)
             }
         }
     }
 
-    fun resetSearchState() {
-        _getSearchState.value = GetGenreState.Idle
+    fun resetSearchLimitState() {
+        _getSearchLimitState.value = GetGenreState.Idle
     }
 
-    fun getTrending(query: String) {
+    fun getTrending(query: String, si: Int, ei: Int) {
         viewModelScope.launch {
             _getTrendingState.value = GetGenreState.Loading
             try {
-                val response = bookRepository.getByTrending(query)
+                val response = bookRepository.getByTrending(query, si, ei)
                 _getTrendingState.value = GetGenreState.Success(response)
             } catch (e: Exception) {
                 _getTrendingState.value = GetGenreState.Error("genre trending error " + e.message)
